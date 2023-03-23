@@ -21,7 +21,6 @@ import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.api.TransportConfigCallback;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.api.errors.InvalidRemoteException;
 import org.eclipse.jgit.api.errors.TransportException;
@@ -35,21 +34,11 @@ import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.revwalk.filter.CommitTimeRevFilter;
 import org.eclipse.jgit.revwalk.filter.RevFilter;
 import org.eclipse.jgit.transport.CredentialsProvider;
-import org.eclipse.jgit.transport.JschConfigSessionFactory;
-import org.eclipse.jgit.transport.OpenSshConfig;
-import org.eclipse.jgit.transport.OpenSshConfig.Host;
-import org.eclipse.jgit.transport.SshSessionFactory;
-import org.eclipse.jgit.transport.SshTransport;
-import org.eclipse.jgit.transport.Transport;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import org.eclipse.jgit.treewalk.CanonicalTreeParser;
-import org.eclipse.jgit.util.FS;
 
 import com.ccsw.gitlog.common.FileDiff;
 import com.ccsw.gitlog.common.RepoUtils;
-import com.jcraft.jsch.JSch;
-import com.jcraft.jsch.JSchException;
-import com.jcraft.jsch.Session;
 
 import rst.pdfbox.layout.elements.ControlElement;
 import rst.pdfbox.layout.elements.Document;
@@ -126,7 +115,8 @@ public class GitScanner {
                     ArrayList<CommitObj> commits = (ArrayList<CommitObj>) git.getValue();
 
                     Paragraph subtitle = new Paragraph();
-                    subtitle.addText("Ã?ndice " + name, 16, PDType1Font.HELVETICA_BOLD);
+                    text = RepoUtils.removeInvalidCharacters("ï¿½Indice " + name, blacklistWords, PDType1Font.HELVETICA_BOLD);
+                    subtitle.addText(text, 16, PDType1Font.HELVETICA_BOLD);
 
                     Frame subtitleFrame = new Frame(subtitle);
                     subtitleFrame.setShape(new Rect());
@@ -143,7 +133,8 @@ public class GitScanner {
                         // Fecha
                         Date commitDate = new Date(Long.valueOf(String.valueOf(commit_data.getCommitTime())) * 1000);
                         String commitDateString = commitDateFormat.format(commitDate);
-                        paragraph.addMarkup("{color:#777777}Autor: " + commit_data.getAuthorIdent().getName() + " " + commitDateString + ":", 12F, BaseFont.Helvetica);
+                        String commitTitle = RepoUtils.removeInvalidCharacters(commit_data.getAuthorIdent().getName() + " " + commitDateString, blacklistWords, PDType1Font.HELVETICA);
+                        paragraph.addMarkup("{color:#777777}Autor: " + commitTitle + ":", 12F, BaseFont.Helvetica);
 
                         Frame commitInfoFrame = new Frame(paragraph);
                         commitInfoFrame.setShape(new Rect());
@@ -154,7 +145,7 @@ public class GitScanner {
                         paragraph = new Paragraph();
                         paragraph.add(new Indent("  ", 6, SpaceUnit.em, 10, PDType1Font.HELVETICA_BOLD, Alignment.Right));
                         paragraph.addText(RepoUtils.removeInvalidCharacters(commit_data.getShortMessage(), blacklistWords, PDType1Font.HELVETICA), 12, PDType1Font.HELVETICA);
-                        paragraph.addText("  - " + commit_data.getName() + "\n", 9, PDType1Font.HELVETICA);
+                        paragraph.addText(RepoUtils.removeInvalidCharacters("  - " + commit_data.getName() + "\n", blacklistWords, PDType1Font.HELVETICA), 9, PDType1Font.HELVETICA);
 
                         Frame frame = new Frame(paragraph);
                         frame.setShape(new Rect());
@@ -174,7 +165,7 @@ public class GitScanner {
 
                     Paragraph subtitle = new Paragraph();
                     subtitle = new Paragraph();
-                    subtitle.addText("Detalles " + name, 16, PDType1Font.HELVETICA_BOLD);
+                    subtitle.addText(RepoUtils.removeInvalidCharacters("Detalles " + name, blacklistWords, PDType1Font.HELVETICA), 16, PDType1Font.HELVETICA_BOLD);
 
                     Frame subtitleFrame = new Frame(subtitle);
                     subtitleFrame = new Frame(subtitle);
@@ -201,7 +192,8 @@ public class GitScanner {
                         // Fecha
                         Date commitDate = new Date(Long.valueOf(String.valueOf(commit_data.getCommitTime())) * 1000);
                         String commitDateString = commitDateFormat.format(commitDate);
-                        paragraph.addMarkup("{color:#777777}Autor: " + commit_data.getAuthorIdent().getName() + " " + commitDateString + ":", 12F, BaseFont.Helvetica);
+                        String commitTitle = RepoUtils.removeInvalidCharacters(commit_data.getAuthorIdent().getName() + " " + commitDateString, blacklistWords, PDType1Font.HELVETICA);
+                        paragraph.addMarkup("{color:#777777}Autor: " + commitTitle + ":", 12F, BaseFont.Helvetica);
 
                         Frame commitInfoFrame = new Frame(paragraph);
                         commitInfoFrame.setShape(new Rect());
@@ -212,7 +204,7 @@ public class GitScanner {
                         paragraph = new Paragraph();
                         paragraph.add(new Indent("  ", 6, SpaceUnit.em, 10, PDType1Font.HELVETICA_BOLD, Alignment.Right));
                         paragraph.addText(RepoUtils.removeInvalidCharacters(commit_data.getShortMessage(), blacklistWords, PDType1Font.HELVETICA), 12, PDType1Font.HELVETICA);
-                        paragraph.addText("  - " + commit_data.getName(), 9, PDType1Font.HELVETICA);
+                        paragraph.addText(RepoUtils.removeInvalidCharacters(commit_data.getName(), blacklistWords, PDType1Font.HELVETICA), 9, PDType1Font.HELVETICA);
 
                         Frame frame = new Frame(paragraph);
                         frame.setShape(new Rect());
@@ -247,7 +239,7 @@ public class GitScanner {
                                     } else {
                                         title = new Paragraph();
                                         line = line.replace("diff --git ", "").replace(" b/", "\nb/");
-                                        title.addText("\n" + line, 8, PDType1Font.HELVETICA_BOLD);
+                                        title.addText("\n" + line, 8, font);
                                         document.add(title);
                                     }
                                 }
@@ -329,90 +321,6 @@ public class GitScanner {
         return git;
     }
 
-    private Git getGitObject(String url, String user, String pass) {
-
-        Git git = null;
-
-        System.out.println("Cloning " + url);
-
-        File localPath;
-        try {
-
-            localPath = File.createTempFile("TestGitRepository", "");
-
-            if (!localPath.delete()) {
-                throw new IOException("Could not delete temporary file " + localPath);
-            }
-
-            TransportConfigCallback transportConfigCallback = new SshTransportConfigCallback();
-
-            git = Git.cloneRepository().setTransportConfigCallback(transportConfigCallback).setURI(url).setDirectory(localPath).call();
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (InvalidRemoteException e) {
-            e.printStackTrace();
-        } catch (TransportException e) {
-            e.printStackTrace();
-        } catch (GitAPIException e) {
-            e.printStackTrace();
-        }
-
-        return git;
-    }
-
-    private static class SshPathTransportConfigCallback implements TransportConfigCallback {
-
-        private final SshSessionFactory sshSessionFactory = new JschConfigSessionFactory() {
-            @Override
-            protected void configure(Host host, Session session) {
-                session.setConfig("StrictHostKeyChecking", "no");
-            }
-
-            @Override
-            protected JSch createDefaultJSch(FS fs) throws JSchException {
-                JSch defaultJSch = super.createDefaultJSch(fs);
-                defaultJSch.addIdentity(sshPrivateFilePath);
-                return defaultJSch;
-            }
-
-        };
-
-        @Override
-        public void configure(Transport transport) {
-            SshTransport sshTransport = (SshTransport) transport;
-            sshTransport.setSshSessionFactory(sshSessionFactory);
-        }
-
-    }
-
-    private static final String sshPrivateFilePath = "C:\\Users\\pajimene\\.ssh\\git-ssh.pub";
-    private static final String sshPassword = "prueba";
-
-    private static class SshTransportConfigCallback implements TransportConfigCallback {
-
-        private final SshSessionFactory sshSessionFactory = new JschConfigSessionFactory() {
-            @Override
-            protected void configure(OpenSshConfig.Host hc, Session session) {
-                session.setConfig("StrictHostKeyChecking", "no");
-            }
-
-            @Override
-            protected JSch createDefaultJSch(FS fs) throws JSchException {
-                JSch jSch = super.createDefaultJSch(fs);
-                jSch.addIdentity(sshPrivateFilePath, sshPassword.getBytes());
-                return jSch;
-            }
-        };
-
-        @Override
-        public void configure(Transport transport) {
-            SshTransport sshTransport = (SshTransport) transport;
-            sshTransport.setSshSessionFactory(sshSessionFactory);
-        }
-
-    }
-
     /**
     * Normalizar nombre del git
     *
@@ -443,7 +351,7 @@ public class GitScanner {
                 branch = splitRepo[1];
             }
 
-            Git git = getGitObject(repoUrl, user, pass);
+            Git git = getGitObjectUserPass(repoUrl, user, pass);
 
             Repository repo = git.getRepository();
 
